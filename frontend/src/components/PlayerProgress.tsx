@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Paper,
   Typography,
@@ -34,7 +34,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-
+  BarChart,
+  Bar,
   PieChart,
   Pie,
   Cell,
@@ -50,7 +51,7 @@ const PlayerProgress: React.FC<PlayerProgressProps> = ({ analysisResult }) => {
   const [loading, setLoading] = useState(false);
 
   // Mock progress data for demo
-  const mockProgressData = useMemo(() => ({
+  const mockProgressData = {
     player_id: playerId,
     total_sessions: 15,
     improvement_trend: 'improving',
@@ -93,11 +94,11 @@ const PlayerProgress: React.FC<PlayerProgressProps> = ({ analysisResult }) => {
       { session: 14, quality: 0.72, date: '2024-11-29' },
       { session: 15, quality: 0.85, date: '2024-12-01' },
     ]
-  }), []);
+  };
 
   useEffect(() => {
     setProgressData(mockProgressData);
-  }, [playerId, mockProgressData]);
+  }, [playerId]);
 
   const loadPlayerProgress = async () => {
     setLoading(true);
@@ -119,16 +120,16 @@ const PlayerProgress: React.FC<PlayerProgressProps> = ({ analysisResult }) => {
     }
   };
 
-  // const getTrendColor = (trend: string) => {
-  //   switch (trend) {
-  //     case 'improving':
-  //       return 'success';
-  //     case 'declining':
-  //       return 'error';
-  //     default:
-  //       return 'warning';
-  //   }
-  // };
+  const getTrendColor = (trend: string) => {
+    switch (trend) {
+      case 'improving':
+        return 'success';
+      case 'declining':
+        return 'error';
+      default:
+        return 'warning';
+    }
+  };
 
   const COLORS = ['#FF6B35', '#004D9F', '#F7931E', '#00BCD4', '#4CAF50', '#9C27B0'];
 

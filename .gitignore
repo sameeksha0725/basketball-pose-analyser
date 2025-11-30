@@ -90,4 +90,9 @@ temp/
 data/
 uploads/
 *.csv
-*.json
+
+# Exclude data JSON files but allow config files
+!package.json
+!tsconfig.json
+!**/package.json
+!**/tsconfig.json
