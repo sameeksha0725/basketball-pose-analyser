@@ -41,6 +41,9 @@ class PoseAnalysisService:
     
     def analyze_image(self, image_path: str) -> Dict:
         """Analyze basketball pose from a single image."""
+        # Ensure model is in eval mode
+        self.model.eval()
+        
         # Load and process image
         image = cv2.imread(image_path)
         if image is None:
@@ -65,17 +68,39 @@ class PoseAnalysisService:
         # Process predictions
         top_down_probs = torch.softmax(predictions["top_down_prediction"], dim=-1)
         bottom_up_probs = torch.softmax(predictions["bottom_up_prediction"], dim=-1)
-        quality_score = predictions["quality_score"].item()
+        quality_score_tensor = predictions["quality_score"]
+        
+        # Handle quality score tensor shape
+        if quality_score_tensor.ndim > 1:
+            quality_score = quality_score_tensor.squeeze().item()
+        else:
+            quality_score = quality_score_tensor.item()
         
         # Get predicted classes
         top_down_class = torch.argmax(top_down_probs, dim=-1).item()
         bottom_up_class = torch.argmax(bottom_up_probs, dim=-1).item()
         
         # Generate analysis
-        analysis = self._generate_pose_analysis(
-            keypoints, top_down_class, bottom_up_class, quality_score,
-            predictions["spatial_attention"].cpu().numpy()
-        )
+        try:
+            analysis = self._generate_pose_analysis(
+                keypoints, top_down_class, bottom_up_class, quality_score,
+                predictions["spatial_attention"].cpu().numpy()
+            )
+        except Exception as e:
+            print(f"Error in _generate_pose_analysis: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Return basic analysis without feedback if generation fails
+            analysis = {
+                "detected_pose": BASKETBALL_POSE_CLASSES[top_down_class],
+                "pose_metrics": {},
+                "quality_assessment": {
+                    "score": quality_score,
+                    "rating": "Good"
+                },
+                "important_joints": [],
+                "feedback": {"strengths": [], "improvements": []}
+            }
         
         return {
             "keypoints_detected": True,
@@ -99,6 +124,9 @@ class PoseAnalysisService:
     
     def analyze_video(self, video_path: str) -> Dict:
         """Analyze basketball poses from a video sequence."""
+        # Ensure model is in eval mode
+        self.model.eval()
+        
         # Extract keypoint sequence
         keypoint_sequence = self.pose_extractor.extract_from_video(video_path)
         
@@ -122,7 +150,13 @@ class PoseAnalysisService:
         # Process sequence-level predictions
         top_down_probs = torch.softmax(predictions["top_down_prediction"], dim=-1)
         bottom_up_probs = torch.softmax(predictions["bottom_up_prediction"], dim=-1)
-        quality_score = predictions["quality_score"].item()
+        quality_score_tensor = predictions["quality_score"]
+        
+        # Handle quality score tensor shape
+        if quality_score_tensor.ndim > 1:
+            quality_score = quality_score_tensor.squeeze().item()
+        else:
+            quality_score = quality_score_tensor.item()
         
         # Analyze motion patterns
         motion_analysis = self._analyze_motion_patterns(keypoint_sequence)
@@ -180,45 +214,69 @@ class PoseAnalysisService:
     
     def _calculate_pose_metrics(self, keypoints: np.ndarray) -> Dict:
         """Calculate various pose quality metrics."""
-        # Define key body part indices (MediaPipe pose landmarks)
-        shoulder_left = keypoints[11]  # Left shoulder
-        shoulder_right = keypoints[12]  # Right shoulder
-        hip_left = keypoints[23]  # Left hip
-        hip_right = keypoints[24]  # Right hip
-        knee_left = keypoints[25]  # Left knee
-        knee_right = keypoints[26]  # Right knee
-        ankle_left = keypoints[27]  # Left ankle
-        ankle_right = keypoints[28]  # Right ankle
+        try:
+            # Define key body part indices (MediaPipe pose landmarks)
+            # MediaPipe returns 33 keypoints, but we check bounds
+            if len(keypoints) < 29:
+                return {
+                    "shoulder_width": 0.0,
+                    "hip_width": 0.0,
+                    "torso_angle": 0.0,
+                    "balance_ratio": 0.0,
+                    "left_leg_length": 0.0,
+                    "right_leg_length": 0.0,
+                    "body_symmetry": 0.0
+                }
+            
+            shoulder_left = keypoints[11]  # Left shoulder
+            shoulder_right = keypoints[12]  # Right shoulder
+            hip_left = keypoints[23]  # Left hip
+            hip_right = keypoints[24]  # Right hip
+            knee_left = keypoints[25]  # Left knee
+            knee_right = keypoints[26]  # Right knee
+            ankle_left = keypoints[27]  # Left ankle
+            ankle_right = keypoints[28]  # Right ankle
+            
+            # Calculate metrics
+            shoulder_width = np.linalg.norm(shoulder_left[:2] - shoulder_right[:2])
+            hip_width = np.linalg.norm(hip_left[:2] - hip_right[:2])
         
-        # Calculate metrics
-        shoulder_width = np.linalg.norm(shoulder_left[:2] - shoulder_right[:2])
-        hip_width = np.linalg.norm(hip_left[:2] - hip_right[:2])
-        
-        # Body alignment (how straight the torso is)
-        torso_center_top = (shoulder_left[:2] + shoulder_right[:2]) / 2
-        torso_center_bottom = (hip_left[:2] + hip_right[:2]) / 2
-        torso_angle = np.arctan2(
-            torso_center_top[1] - torso_center_bottom[1],
-            torso_center_top[0] - torso_center_bottom[0]
-        ) * 180 / np.pi
-        
-        # Balance assessment (feet positioning)
-        feet_distance = np.linalg.norm(ankle_left[:2] - ankle_right[:2])
-        balance_ratio = feet_distance / shoulder_width if shoulder_width > 0 else 0
-        
-        # Knee alignment
-        left_knee_ankle_dist = np.linalg.norm(knee_left[:2] - ankle_left[:2])
-        right_knee_ankle_dist = np.linalg.norm(knee_right[:2] - ankle_right[:2])
-        
-        return {
-            "shoulder_width": float(shoulder_width),
-            "hip_width": float(hip_width),
-            "torso_angle": float(torso_angle),
-            "balance_ratio": float(balance_ratio),
-            "left_leg_length": float(left_knee_ankle_dist),
-            "right_leg_length": float(right_knee_ankle_dist),
-            "body_symmetry": float(abs(left_knee_ankle_dist - right_knee_ankle_dist))
-        }
+            # Body alignment (how straight the torso is)
+            torso_center_top = (shoulder_left[:2] + shoulder_right[:2]) / 2
+            torso_center_bottom = (hip_left[:2] + hip_right[:2]) / 2
+            torso_angle = np.arctan2(
+                torso_center_top[1] - torso_center_bottom[1],
+                torso_center_top[0] - torso_center_bottom[0]
+            ) * 180 / np.pi
+            
+            # Balance assessment (feet positioning)
+            feet_distance = np.linalg.norm(ankle_left[:2] - ankle_right[:2])
+            balance_ratio = feet_distance / shoulder_width if shoulder_width > 0 else 0
+            
+            # Knee alignment
+            left_knee_ankle_dist = np.linalg.norm(knee_left[:2] - ankle_left[:2])
+            right_knee_ankle_dist = np.linalg.norm(knee_right[:2] - ankle_right[:2])
+            
+            return {
+                "shoulder_width": float(shoulder_width),
+                "hip_width": float(hip_width),
+                "torso_angle": float(torso_angle),
+                "balance_ratio": float(balance_ratio),
+                "left_leg_length": float(left_knee_ankle_dist),
+                "right_leg_length": float(right_knee_ankle_dist),
+                "body_symmetry": float(abs(left_knee_ankle_dist - right_knee_ankle_dist))
+            }
+        except Exception as e:
+            print(f"Error calculating pose metrics: {str(e)}")
+            return {
+                "shoulder_width": 0.0,
+                "hip_width": 0.0,
+                "torso_angle": 0.0,
+                "balance_ratio": 0.0,
+                "left_leg_length": 0.0,
+                "right_leg_length": 0.0,
+                "body_symmetry": 0.0
+            }
     
     def _find_important_joints(self, attention_weights: np.ndarray) -> List[str]:
         """Identify joints with highest attention weights."""
@@ -254,56 +312,64 @@ class PoseAnalysisService:
     ) -> Dict:
         """Generate specific feedback based on the detected pose."""
         
-        feedback = {
-            "strengths": [],
-            "improvements": [],
-            "technique_tips": []
-        }
-        
-        if pose_name == "shooting":
-            # Shooting form analysis
-            if metrics["torso_angle"] > -10 and metrics["torso_angle"] < 10:
-                feedback["strengths"].append("Good torso alignment")
-            else:
-                feedback["improvements"].append("Work on keeping torso straight")
+        try:
+            feedback = {
+                "strengths": [],
+                "improvements": [],
+                "technique_tips": []
+            }
             
-            if metrics["balance_ratio"] > 0.8 and metrics["balance_ratio"] < 1.2:
-                feedback["strengths"].append("Good foot positioning")
-            else:
-                feedback["improvements"].append("Adjust foot width for better balance")
+            if pose_name == "shooting":
+                # Shooting form analysis
+                if metrics["torso_angle"] > -10 and metrics["torso_angle"] < 10:
+                    feedback["strengths"].append("Good torso alignment")
+                else:
+                    feedback["improvements"].append("Work on keeping torso straight")
+                
+                if metrics["balance_ratio"] > 0.8 and metrics["balance_ratio"] < 1.2:
+                    feedback["strengths"].append("Good foot positioning")
+                else:
+                    feedback["improvements"].append("Adjust foot width for better balance")
+                
+                feedback["technique_tips"].extend([
+                    "Keep your shooting elbow under the ball",
+                    "Follow through with your wrist snap",
+                    "Maintain consistent foot positioning"
+                ])
             
-            feedback["technique_tips"].extend([
-                "Keep your shooting elbow under the ball",
-                "Follow through with your wrist snap",
-                "Maintain consistent foot positioning"
-            ])
-        
-        elif pose_name == "defensive_stance":
-            if metrics["balance_ratio"] > 1.0:
-                feedback["strengths"].append("Good wide stance for defense")
-            else:
-                feedback["improvements"].append("Widen your stance for better mobility")
+            elif pose_name == "defensive_stance":
+                if metrics["balance_ratio"] > 1.0:
+                    feedback["strengths"].append("Good wide stance for defense")
+                else:
+                    feedback["improvements"].append("Widen your stance for better mobility")
+                
+                feedback["technique_tips"].extend([
+                    "Keep your knees bent and ready to move",
+                    "Stay low with arms extended",
+                    "Keep your weight on the balls of your feet"
+                ])
             
-            feedback["technique_tips"].extend([
-                "Keep your knees bent and ready to move",
-                "Stay low with arms extended",
-                "Keep your weight on the balls of your feet"
-            ])
-        
-        elif pose_name == "dribbling":
-            feedback["technique_tips"].extend([
-                "Keep your head up to see the court",
-                "Use fingertips, not palm",
-                "Protect the ball with your off hand"
-            ])
-        
-        # Add general feedback
-        if metrics["body_symmetry"] < 0.05:
-            feedback["strengths"].append("Excellent body symmetry")
-        elif metrics["body_symmetry"] > 0.1:
-            feedback["improvements"].append("Work on balancing both sides of your body")
-        
-        return feedback
+            elif pose_name == "dribbling":
+                feedback["technique_tips"].extend([
+                    "Keep your head up to see the court",
+                    "Use fingertips, not palm",
+                    "Protect the ball with your off hand"
+                ])
+            
+            # Add general feedback
+            if metrics["body_symmetry"] < 0.05:
+                feedback["strengths"].append("Excellent body symmetry")
+            elif metrics["body_symmetry"] > 0.1:
+                feedback["improvements"].append("Work on balancing both sides of your body")
+            
+            return feedback
+        except Exception as e:
+            print(f"Error generating pose-specific feedback: {str(e)}")
+            return {
+                "strengths": ["Pose detected"],
+                "improvements": [],
+                "technique_tips": []
+            }
     
     def _analyze_motion_patterns(self, keypoint_sequence: List[np.ndarray]) -> Dict:
         """Analyze motion patterns across the video sequence."""

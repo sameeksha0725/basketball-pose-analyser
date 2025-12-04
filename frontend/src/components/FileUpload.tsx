@@ -20,7 +20,7 @@ import {
 import axios from 'axios';
 
 interface FileUploadProps {
-  onFileUpload: (filename: string) => void;
+  onFileUpload: (filename: string, fileType: 'image' | 'video') => void;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
@@ -61,7 +61,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
       );
 
       setUploadResult(response.data);
-      onFileUpload(response.data.filename);
+      // Pass file type to parent component
+      onFileUpload(response.data.filename, isVideo ? 'video' : 'image');
       
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Upload failed');

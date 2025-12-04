@@ -106,7 +106,10 @@ async def analyze_image(filename: str):
         )
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Analysis error: {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)} | {error_trace}")
 
 @router.post("/analyze-video/{filename}", response_model=VideoAnalysisResponse)
 async def analyze_video(filename: str, background_tasks: BackgroundTasks):
@@ -134,7 +137,10 @@ async def analyze_video(filename: str, background_tasks: BackgroundTasks):
         )
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Video analysis failed: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Video analysis error: {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Video analysis failed: {str(e)} | {error_trace}")
 
 @router.get("/pose-classes")
 async def get_pose_classes():

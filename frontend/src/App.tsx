@@ -69,9 +69,14 @@ function App() {
     setActiveTab(newValue);
   };
 
-  const handleFileUpload = (filename: string) => {
+  const handleFileUpload = (filename: string, fileType: 'image' | 'video') => {
     setUploadedFile(filename);
-    setActiveTab(1); // Switch to analysis tab
+    // Route to appropriate tab based on file type
+    if (fileType === 'video') {
+      setActiveTab(2); // Switch to Video Analysis tab
+    } else {
+      setActiveTab(1); // Switch to Pose Analysis tab
+    }
   };
 
   const handleAnalysisComplete = (result: any) => {
