@@ -145,6 +145,18 @@ class BasketballPoseTransformer(PreTrainedModel):
         
         self.init_weights()
     
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
+        """Load model from pretrained checkpoint or create new instance."""
+        try:
+            # Try to load from path using parent class method
+            return super().from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+        except Exception as e:
+            print(f"Warning: Could not load pretrained model from {pretrained_model_name_or_path}: {e}")
+            # Return new instance with default config if loading fails
+            config = cls.config_class()
+            return cls(config)
+    
     def forward(
         self,
         keypoints: torch.Tensor,
@@ -189,8 +201,10 @@ class BasketballPoseTransformer(PreTrainedModel):
         # Top-down analysis (use last timestep)
         top_down_output = self.top_down_head(temporal_output[:, -1, :])
         
-        # Bottom-up analysis (use all spatial features from last timestep)
-        bottom_up_input = spatial_features.view(batch_size, -1)
+        # Bottom-up analysis (use temporal features from last timestep)
+        # temporal_features shape: (batch_size, seq_len, num_keypoints, d_model)
+        last_temporal_features = temporal_features[:, -1, :, :]  # (batch_size, num_keypoints, d_model)
+        bottom_up_input = last_temporal_features.view(batch_size, -1)  # (batch_size, num_keypoints * d_model)
         bottom_up_output = self.bottom_up_head(bottom_up_input)
         
         # Pose quality assessment

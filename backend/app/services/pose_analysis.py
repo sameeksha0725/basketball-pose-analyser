@@ -16,6 +16,17 @@ class PoseAnalysisService:
         
         if model_path:
             self.load_model(model_path)
+        else:
+            # Initialize default model if no path provided
+            self._init_default_model()
+    
+    def _init_default_model(self):
+        """Initialize default model with configuration."""
+        from app.models.pose_transformer import BasketballPoseConfig
+        config = BasketballPoseConfig()
+        self.model = BasketballPoseTransformer(config)
+        self.model.to(self.device)
+        self.model.eval()
     
     def load_model(self, model_path: str):
         """Load the trained pose transformer model."""
@@ -25,12 +36,8 @@ class PoseAnalysisService:
             self.model.eval()
         except Exception as e:
             print(f"Warning: Could not load model from {model_path}: {e}")
-            # For demo purposes, create a mock model
-            from app.models.pose_transformer import BasketballPoseConfig
-            config = BasketballPoseConfig()
-            self.model = BasketballPoseTransformer(config)
-            self.model.to(self.device)
-            self.model.eval()
+            # For demo purposes, create a default model
+            self._init_default_model()
     
     def analyze_image(self, image_path: str) -> Dict:
         """Analyze basketball pose from a single image."""
@@ -227,12 +234,20 @@ class PoseAnalysisService:
         ]
         
         # Get average attention for each joint
-        avg_attention = np.mean(attention_weights, axis=0)
+        # Flatten and take mean to get single score per joint
+        if attention_weights.ndim == 3:
+            # Shape: (batch*seq, num_keypoints, num_keypoints)
+            avg_attention = np.mean(attention_weights, axis=(0, 2))  # Average over batch/seq and attention heads
+        elif attention_weights.ndim == 2:
+            # Shape: (num_keypoints, num_keypoints)
+            avg_attention = np.mean(attention_weights, axis=1)  # Average over attention heads
+        else:
+            avg_attention = attention_weights.flatten()
         
         # Find top 5 most attended joints
         top_indices = np.argsort(avg_attention)[-5:][::-1]
         
-        return [landmark_names[i] for i in top_indices if i < len(landmark_names)]
+        return [landmark_names[int(i)] for i in top_indices if int(i) < len(landmark_names)]
     
     def _generate_pose_specific_feedback(
         self, pose_name: str, keypoints: np.ndarray, metrics: Dict
