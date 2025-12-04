@@ -97,6 +97,7 @@ async def analyze_image(filename: str):
         analysis_result = pose_service.analyze_image(file_path)
         
         if "error" in analysis_result:
+            # Return the error message directly without the traceback
             raise HTTPException(status_code=400, detail=analysis_result["error"])
         
         return PoseAnalysisResponse(
@@ -105,6 +106,9 @@ async def analyze_image(filename: str):
             analysis=analysis_result
         )
     
+    except HTTPException:
+        # Re-raise HTTP exceptions without wrapping
+        raise
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()

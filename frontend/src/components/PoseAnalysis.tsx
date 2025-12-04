@@ -55,7 +55,13 @@ const PoseAnalysis: React.FC<PoseAnalysisProps> = ({
       setResult(response.data);
       onAnalysisComplete(response.data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Analysis failed');
+      const errorDetail = err.response?.data?.detail || 'Analysis failed';
+      // Extract just the error message if it's wrapped
+      let displayError = errorDetail;
+      if (displayError.includes('|')) {
+        displayError = displayError.split('|')[0].trim();
+      }
+      setError(displayError);
     } finally {
       setAnalyzing(false);
     }

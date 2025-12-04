@@ -234,15 +234,19 @@ class PoseExtractor:
     
     def extract_keypoints(self, image: np.ndarray) -> Optional[np.ndarray]:
         """Extract 3D keypoints from image."""
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = self.pose.process(image_rgb)
-        
-        if results.pose_landmarks:
-            keypoints = []
-            for landmark in results.pose_landmarks.landmark:
-                keypoints.append([landmark.x, landmark.y, landmark.z])
-            return np.array(keypoints)
-        return None
+        try:
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            results = self.pose.process(image_rgb)
+            
+            if results.pose_landmarks:
+                keypoints = []
+                for landmark in results.pose_landmarks.landmark:
+                    keypoints.append([landmark.x, landmark.y, landmark.z])
+                return np.array(keypoints)
+            return None
+        except Exception as e:
+            print(f"Error extracting keypoints: {str(e)}")
+            return None
     
     def extract_from_video(self, video_path: str) -> List[np.ndarray]:
         """Extract keypoints from video sequence."""

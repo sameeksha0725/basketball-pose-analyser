@@ -52,8 +52,10 @@ class PoseAnalysisService:
         # Extract keypoints
         keypoints = self.pose_extractor.extract_keypoints(image)
         if keypoints is None:
+            error_msg = "No pose detected in image. Please ensure the image shows a clear view of a person in a basketball pose."
+            print(f"Keypoint extraction failed: {error_msg}")
             return {
-                "error": "No pose detected in image",
+                "error": error_msg,
                 "keypoints_detected": False
             }
         
